@@ -25,9 +25,9 @@ A self-hosted web controller for Sonos speakers. Access and control your Sonos s
 - Album art
 - TuneIn radio search
 
-## Favourites Note
+## Limitation Note
 
-Sonos favourites that use streaming services (Spotify, BBC Sounds, Apple Music etc) or music library playlists require Sonos account tokens that are only maintained by the official Sonos app. These favourites are shown greyed out with a "Sonos app" label — start them playing in the official app first, then use Sonos Online for volume, grouping and transport control.
+Sonos favourites that use streaming services (Spotify, BBC Sounds, Apple Music etc.) or music library playlists require Sonos account tokens that are only maintained by the official Sonos app. You can start them playing in the official app first and then use Sonos Online for volume, grouping and transport control.
 
 TuneIn radio stations added as favourites work fine.
 
