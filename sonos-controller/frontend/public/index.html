@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Sonos Online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0a; --bg2: #141414; --bg3: #1e1e1e; --bg4: #282828; --bg5: #323232;
+  --text: #ffffff; --text2: rgba(255,255,255,0.65); --text3: rgba(255,255,255,0.35);
+  --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+  --muted: rgba(255,255,255,0.10); --shadow: rgba(0,0,0,0.5);
+  --play-bg: #ffffff; --play-fg: #000000;
+  --accent: #4ade80;
+}
+[data-theme="light"] {
+  --bg: #f4f4f4; --bg2: #ffffff; --bg3: #ececec; --bg4: #e0e0e0; --bg5: #d4d4d4;
+  --text: #0a0a0a; --text2: rgba(0,0,0,0.60); --text3: rgba(0,0,0,0.35);
+  --border: rgba(0,0,0,0.08); --border2: rgba(0,0,0,0.15);
+  --muted: rgba(0,0,0,0.07); --shadow: rgba(0,0,0,0.12);
+  --play-bg: #0a0a0a; --play-fg: #ffffff;
+}
+
+html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+/* ─── Login ── */
+#loginScreen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 24px; }
+.login-box { width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+.login-logo { font-size: 26px; font-weight: 700; letter-spacing: -0.04em; }
+.login-form { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.login-input { width: 100%; padding: 13px 15px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; transition: border-color .15s; -webkit-appearance: none; }
+.login-input:focus { border-color: var(--text3); }
+.login-input::placeholder { color: var(--text3); }
+.login-btn { width: 100%; padding: 13px; background: var(--play-bg); color: var(--play-fg); border: none; border-radius: 8px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; }
+.login-btn:hover { opacity: .85; }
+.login-error { font-size: 13px; color: #e05555; text-align: center; min-height: 18px; }
+
+/* ─── App shell ── */
+#app { display: none; height: 100vh; height: 100dvh; }
+@media (min-width: 768px) {
+  #app { display: grid !important; grid-template-columns: 248px 1fr; grid-template-rows: 1fr 80px; }
+  .sidebar { display: flex !important; } .player-bar { display: flex !important; }
+  .mobile-nav { display: none !important; } .mobile-player { display: none !important; }
+}
+@media (max-width: 767px) {
+  #app { display: flex !important; flex-direction: column; }
+  .sidebar { display: none !important; } .player-bar { display: none !important; }
+}
+
+/* ─── Sidebar ── */
+.sidebar { grid-row: 1/3; background: var(--bg); border-right: 1px solid var(--border); flex-direction: column; overflow: hidden; }
+
+.sidebar-top { padding: 16px 16px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; }
+.sidebar-logo { font-size: 18px; font-weight: 700; letter-spacing: -0.04em; }
+.sidebar-top-right { display: flex; align-items: center; gap: 6px; }
+
+/* Theme toggle — top right corner */
+.theme-btn { width: 30px; height: 30px; border-radius: 50%; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; flex-shrink: 0; }
+.theme-btn:hover { background: var(--bg4); color: var(--text); }
+.theme-btn svg { width: 14px; height: 14px; }
+
+.logout-btn { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 11px; font-family: inherit; padding: 4px 8px; border-radius: 5px; transition: all .15s; }
+.logout-btn:hover { color: var(--text); background: var(--muted); }
+
+.demo-banner { margin: 10px 12px; padding: 8px 10px; background: rgba(255,193,7,.08); border: 1px solid rgba(255,193,7,.2); border-radius: 5px; font-size: 11px; color: rgba(255,193,7,.8); line-height: 1.45; }
+
+.sidebar-section { border-bottom: 1px solid var(--border); }
+.sidebar-label { padding: 10px 16px 4px; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); }
+
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: var(--text2); cursor: pointer; transition: background .15s, color .15s; user-select: none; -webkit-tap-highlight-color: transparent; }
+.nav-item:hover { background: var(--muted); color: var(--text); }
+.nav-item.active { background: var(--bg3); color: var(--text); font-weight: 500; }
+.nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: .7; }
+.nav-item.active svg { opacity: 1; }
+
+.rooms-list { flex: 1; overflow-y: auto; }
+.rooms-list::-webkit-scrollbar { width: 3px; }
+.rooms-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Room rows in sidebar — with group indicator */
+.room-row { display: flex; align-items: center; padding: 8px 16px; cursor: pointer; gap: 8px; transition: background .15s; -webkit-tap-highlight-color: transparent; }
+.room-row:hover { background: var(--muted); }
+.room-row.active { background: var(--bg3); }
+
+.room-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; transition: all .3s; }
+.room-dot.on { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+
+.room-row-info { flex: 1; min-width: 0; }
+.room-row-name { font-size: 13px; font-weight: 500; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-row.active .room-row-name { color: var(--text); }
+.room-row-sub { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.room-row-vol { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+
+/* Group badge in sidebar */
+.group-badge { font-size: 9px; font-weight: 600; letter-spacing: .04em; background: var(--bg4); color: var(--text3); padding: 2px 5px; border-radius: 3px; flex-shrink: 0; }
+.group-badge.coord { background: rgba(74,222,128,.12); color: var(--accent); }
+
+/* ─── Main content ── */
+.main-content { overflow-y: auto; background: var(--bg); -webkit-overflow-scrolling: touch; }
+.main-content::-webkit-scrollbar { width: 5px; }
+.main-content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.panel-inner { padding: 24px 24px 32px; }
+@media (max-width: 767px) { .panel-inner { padding: 16px 14px 20px; } }
+
+.panel-title { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 4px; }
+.panel-subtitle { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.hdr-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); padding: 7px 13px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; transition: all .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.hdr-btn:hover { color: var(--text); border-color: var(--border2); }
+.hdr-btn svg { width: 12px; height: 12px; }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; margin-top: 22px; }
+.section-head:first-child { margin-top: 0; }
+.section-name { font-size: 14px; font-weight: 600; }
+.section-link { font-size: 12px; color: var(--text3); cursor: pointer; transition: color .15s; }
+.section-link:hover { color: var(--text); }
+.empty-state { color: var(--text3); font-size: 13px; padding: 16px 0; }
+
+/* ─── Rooms grid ── */
+.rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
+@media (max-width: 767px) { .rooms-grid { grid-template-columns: 1fr 1fr; gap: 8px; } }
+@media (max-width: 380px) { .rooms-grid { grid-template-columns: 1fr; } }
+
+.room-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 13px; cursor: pointer; transition: background .15s; -webkit-tap-highlight-color: transparent; position: relative; }
+.room-card:hover { background: var(--bg3); }
+.room-card.selected { border-color: var(--border2); }
+.room-card.grouped { border-left: 3px solid var(--accent); padding-left: 11px; }
+
+.rc-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 7px; gap: 8px; }
+.rc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-model { font-size: 11px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-track { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-vol { font-size: 11px; color: var(--text3); margin-top: 3px; }
+.rc-group { font-size: 10px; color: var(--accent); margin-top: 3px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.eq-bars { display: flex; gap: 2px; align-items: flex-end; height: 14px; flex-shrink: 0; }
+.eq-bars span { width: 3px; background: var(--accent); border-radius: 1px; animation: eq 1.1s ease-in-out infinite; }
+.eq-bars span:nth-child(1) { height: 5px; animation-delay: 0s; }
+.eq-bars span:nth-child(2) { height: 11px; animation-delay: .18s; }
+.eq-bars span:nth-child(3) { height: 7px; animation-delay: .36s; }
+@keyframes eq { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+
+/* ─── Favorites ── */
+.favs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 10px; }
+@media (max-width: 767px) { .favs-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
+@media (max-width: 380px) { .favs-grid { grid-template-columns: repeat(2, 1fr); } }
+.fav-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 11px; cursor: pointer; transition: background .15s; -webkit-tap-highlight-color: transparent; }
+.fav-card:hover { background: var(--bg3); }
+.fav-disabled { opacity: 0.45; cursor: default; }
+.fav-disabled:hover { background: var(--bg2); }
+.fav-art { width: 100%; aspect-ratio: 1; background: var(--bg3); border-radius: 5px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: var(--text3); overflow: hidden; }
+.fav-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fav-name { font-size: 11px; font-weight: 500; line-height: 1.35; color: var(--text2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* ─── Now playing card ── */
+.now-playing-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+@media (min-width: 600px) {
+  .np-inner { display: flex; }
+  .np-art { width: 176px; height: 176px; flex-shrink: 0; }
+  .np-meta { flex: 1; padding: 20px 22px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+}
+@media (max-width: 599px) {
+  .np-art { width: 100%; aspect-ratio: 1; max-height: 200px; }
+  .np-meta { padding: 14px; }
+}
+.np-art { background: var(--bg3); display: flex; align-items: center; justify-content: center; color: var(--text3); overflow: hidden; flex-shrink: 0; }
+.np-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.np-track { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-artist { font-size: 13px; color: var(--text2); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-album { font-size: 12px; color: var(--text3); margin-bottom: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.time { font-size: 10px; color: var(--text3); font-variant-numeric: tabular-nums; min-width: 30px; flex-shrink: 0; }
+.time:last-child { text-align: right; }
+.prog-track { flex: 1; height: 3px; background: var(--muted); border-radius: 2px; cursor: pointer; }
+.prog-fill { height: 100%; background: var(--text); border-radius: 2px; transition: width .8s linear; }
+
+.controls { display: flex; align-items: center; gap: 2px; margin-bottom: 12px; }
+.ctrl { background: none; border: none; color: var(--text2); cursor: pointer; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+.ctrl:hover { background: var(--muted); color: var(--text); }
+.ctrl.active { color: var(--accent); }
+.ctrl.play-pause { width: 44px; height: 44px; background: var(--play-bg); color: var(--play-fg); }
+.ctrl.play-pause:hover { opacity: .85; }
+.ctrl svg { width: 16px; height: 16px; }
+.ctrl.play-pause svg { width: 18px; height: 18px; }
+
+.vol-row { display: flex; align-items: center; gap: 8px; }
+.vol-btn { background: none; border: none; color: var(--text3); cursor: pointer; display: flex; padding: 2px; transition: color .15s; flex-shrink: 0; }
+.vol-btn:hover { color: var(--text); }
+.vol-btn svg { width: 15px; height: 15px; }
+input[type=range].vol-slider { flex: 1; -webkit-appearance: none; height: 3px; background: var(--muted); border-radius: 2px; outline: none; cursor: pointer; }
+input[type=range].vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--text); cursor: pointer; }
+input[type=range].vol-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: none; cursor: pointer; }
+.vol-label { font-size: 11px; color: var(--text3); min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ─── Group modal ── */
+.modal-overlay { display: none; position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.6); align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; padding: 22px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px var(--shadow); }
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 5px; }
+.modal-subtitle { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
+.group-room-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg3); border-radius: 7px; margin-bottom: 8px; gap: 12px; }
+.group-room-info { flex: 1; min-width: 0; }
+.group-room-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-room-status { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.toggle-pill { width: 40px; height: 24px; background: var(--bg5); border-radius: 12px; cursor: pointer; position: relative; transition: background .2s; border: none; flex-shrink: 0; }
+.toggle-pill.on { background: var(--accent); }
+.toggle-pill::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg3); transition: transform .2s; }
+.toggle-pill.on::after { transform: translateX(16px); background: #fff; }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+.modal-btn { padding: 9px 18px; border-radius: 7px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; border: 1px solid var(--border); background: var(--bg3); color: var(--text2); transition: all .15s; }
+.modal-btn:hover { color: var(--text); }
+.modal-btn.primary { background: var(--play-bg); color: var(--play-fg); border-color: transparent; }
+.modal-btn.primary:hover { opacity: .85; }
+
+/* ─── Queue ── */
+.queue-list { display: flex; flex-direction: column; }
+.q-item { display: flex; align-items: center; padding: 8px 8px; border-radius: 6px; gap: 10px; transition: background .15s; }
+.q-item:hover { background: var(--muted); }
+.q-num { width: 18px; font-size: 11px; color: var(--text3); text-align: center; flex-shrink: 0; }
+.q-art { width: 36px; height: 36px; border-radius: 4px; background: var(--bg3); flex-shrink: 0; overflow: hidden; }
+.q-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.q-info { flex: 1; min-width: 0; }
+.q-track { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-artist { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-dur { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+
+/* ─── Search ── */
+.search-wrap { position: relative; margin-bottom: 18px; }
+.search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text3); pointer-events: none; }
+.search-input { width: 100%; padding: 11px 15px 11px 38px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s; -webkit-appearance: none; }
+.search-input:focus { border-color: var(--border2); }
+.search-input::placeholder { color: var(--text3); }
+
+/* ─── Settings ── */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+@media (max-width: 767px) { .settings-grid { grid-template-columns: 1fr; } }
+.settings-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.settings-card-title { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; }
+.s-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+.s-row:last-child { border-bottom: none; }
+.s-label { font-size: 13px; flex-shrink: 0; }
+.s-value { font-size: 13px; color: var(--text2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+
+/* ─── Desktop player bar ── */
+.player-bar { background: var(--bg2); border-top: 1px solid var(--border); align-items: center; padding: 0 20px; gap: 12px; }
+.bar-track { display: flex; align-items: center; gap: 10px; width: 200px; flex-shrink: 0; min-width: 0; }
+.bar-art { width: 46px; height: 46px; border-radius: 4px; background: var(--bg3); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.bar-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bar-track-info { flex: 1; min-width: 0; }
+.bar-track-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track-artist { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-controls { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 440px; min-width: 0; }
+.bar-ctrl-row { display: flex; align-items: center; gap: 4px; }
+.bar-btn { background: none; border: none; color: var(--text2); cursor: pointer; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all .15s; -webkit-tap-highlight-color: transparent; }
+.bar-btn:hover { background: var(--muted); color: var(--text); }
+.bar-btn.active { color: var(--accent); }
+.bar-btn.play { width: 34px; height: 34px; background: var(--play-bg); color: var(--play-fg); border-radius: 50%; }
+.bar-btn.play:hover { opacity: .85; }
+.bar-btn svg { width: 13px; height: 13px; }
+.bar-btn.play svg { width: 15px; height: 15px; }
+.bar-prog { width: 100%; display: flex; align-items: center; gap: 7px; }
+.bar-time { font-size: 10px; color: var(--text3); font-variant-numeric: tabular-nums; min-width: 28px; flex-shrink: 0; }
+.bar-time:last-child { text-align: right; }
+.bar-prog-track { flex: 1; height: 3px; background: var(--muted); border-radius: 2px; cursor: pointer; }
+.bar-prog-fill { height: 100%; background: var(--text2); border-radius: 2px; }
+.bar-right { width: 190px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.bar-room { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; cursor: pointer; }
+.bar-room:hover { color: var(--text); }
+input[type=range].bar-vol { width: 72px; -webkit-appearance: none; height: 3px; background: var(--muted); border-radius: 2px; outline: none; cursor: pointer; }
+input[type=range].bar-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--text); cursor: pointer; }
+.bar-mute { background: none; border: none; color: var(--text3); cursor: pointer; display: flex; padding: 2px; transition: color .15s; flex-shrink: 0; }
+.bar-mute:hover { color: var(--text); }
+.bar-mute svg { width: 13px; height: 13px; }
+/* Theme button in bar right */
+.bar-theme-btn { width: 26px; height: 26px; border-radius: 50%; background: var(--bg3); border: 1px solid var(--border); color: var(--text3); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; flex-shrink: 0; }
+.bar-theme-btn:hover { background: var(--bg4); color: var(--text); }
+.bar-theme-btn svg { width: 12px; height: 12px; }
+
+/* ─── Mobile mini player ── */
+.mobile-player { background: var(--bg3); border-top: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+.mobile-player-art { width: 40px; height: 40px; border-radius: 4px; background: var(--bg4); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.mobile-player-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mobile-player-info { flex: 1; min-width: 0; }
+.mobile-player-track { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobile-player-artist { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobile-player-controls { display: flex; gap: 2px; align-items: center; }
+.mob-ctrl { background: none; border: none; color: var(--text2); width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+.mob-ctrl.play { background: var(--play-bg); color: var(--play-fg); width: 34px; height: 34px; border-radius: 50%; }
+.mob-ctrl svg { width: 16px; height: 16px; }
+.mob-ctrl.play svg { width: 14px; height: 14px; }
+
+/* ─── Mobile nav ── */
+.mobile-nav { background: var(--bg2); border-top: 1px solid var(--border); flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom, 0px); display: flex; position: sticky; bottom: 0; z-index: 100; }
+.mobile-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 4px 7px; cursor: pointer; color: var(--text3); transition: color .15s; -webkit-tap-highlight-color: transparent; font-size: 10px; font-weight: 500; }
+.mobile-nav-item.active { color: var(--text); }
+.mobile-nav-item svg { width: 20px; height: 20px; }
+
+/* ─── Mobile full NP ── */
+.mobile-np { display: none; position: fixed; inset: 0; z-index: 300; background: var(--bg); flex-direction: column; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
+.mobile-np.open { display: flex; }
+.mnp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.mnp-room-name { font-size: 13px; font-weight: 600; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.mnp-close { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px; -webkit-tap-highlight-color: transparent; }
+.mnp-close svg { width: 22px; height: 22px; }
+.mnp-art { width: 100%; aspect-ratio: 1; max-height: 270px; background: var(--bg3); border-radius: 12px; margin: 0 auto 20px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--text3); }
+.mnp-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mnp-track { font-size: 19px; font-weight: 700; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mnp-artist { font-size: 14px; color: var(--text2); margin-top: 3px; margin-bottom: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mnp-controls { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0; }
+.mnp-ctrl { background: none; border: none; color: var(--text2); cursor: pointer; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.mnp-ctrl.play { background: var(--play-bg); color: var(--play-fg); }
+.mnp-ctrl.active { color: var(--accent); }
+.mnp-ctrl svg { width: 22px; height: 22px; }
+.mnp-ctrl.play svg { width: 24px; height: 24px; }
+.mnp-vol { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+input[type=range].mnp-vol-slider { flex: 1; -webkit-appearance: none; height: 4px; background: var(--muted); border-radius: 2px; outline: none; cursor: pointer; }
+input[type=range].mnp-vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--text); cursor: pointer; }
+
+/* ─── Mobile rooms sheet ── */
+#mobileRoomsSheet { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 300; overflow-y: auto; padding: 20px 14px calc(40px + env(safe-area-inset-bottom,0px)); }
+
+/* ─── Notifs ── */
+.notif-area { position: fixed; bottom: 100px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 600; pointer-events: none; }
+@media (max-width: 767px) { .notif-area { bottom: 150px; left: 16px; right: 16px; } }
+.notif { background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text2); box-shadow: 0 4px 20px var(--shadow); animation: notifIn .2s ease; }
+@keyframes notifIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+* { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">sonos online</div>
+    <div class="login-form">
+      <input class="login-input" type="text" id="loginUser" placeholder="Username" autocomplete="username" autocapitalize="none" spellcheck="false">
+      <input class="login-input" type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+      <div class="login-error" id="loginError"></div>
+      <button class="login-btn" onclick="doLogin()">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-logo">sonos online</div>
+      <div class="sidebar-top-right">
+        <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+          <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Browse</div>
+      <div class="nav-item active" onclick="showPanel('home')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</div>
+      <div class="nav-item" onclick="showPanel('search')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search</div>
+      <div class="nav-item" onclick="showPanel('favorites')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>Favourites</div>
+      <div class="nav-item" onclick="showPanel('queue-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Queue</div>
+      <div class="nav-item" onclick="showPanel('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M2 12h2M20 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/></svg>Settings</div>
+    </div>
+    <div class="sidebar-section"><div class="sidebar-label">Rooms</div></div>
+    <div class="rooms-list" id="sidebarRooms"></div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <button class="logout-btn" onclick="doLogout()" style="width:100%;text-align:left;padding:6px 0">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+
+    <div class="panel active" id="panel-home">
+      <div class="panel-inner">
+        <div class="page-header">
+          <div><div class="panel-title">Home</div><div class="panel-subtitle">All rooms</div></div>
+          <button class="hdr-btn" id="discoverBtn" onclick="rediscover()">Speaker Discovery</button>
+        </div>
+        <div class="section-head" style="margin-top:0"><div class="section-name">Rooms</div></div>
+        <div class="rooms-grid" id="homeRooms"><div class="empty-state"><span class="spinner"></span> Discovering…</div></div>
+        <div class="section-head"><div class="section-name">Favourites</div><span class="section-link" onclick="showPanel('favorites')">See all</span></div>
+        <div class="favs-grid" id="homeFavs"><div class="empty-state">Select a room first</div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-room">
+      <div class="panel-inner">
+        <div class="page-header">
+          <div style="min-width:0;flex:1">
+            <div class="panel-title" id="roomName" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Room</div>
+            <div class="panel-subtitle" id="roomModel">Sonos</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <button class="hdr-btn" onclick="playEverywhere()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Play Everywhere
+            </button>
+            <button class="hdr-btn" onclick="openGroupModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+              Group
+            </button>
+          </div>
+        </div>
+        <div class="now-playing-card">
+          <div class="np-inner">
+            <div class="np-art" id="npArt"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36"><circle cx="24" cy="24" r="20"/><circle cx="24" cy="24" r="6"/></svg></div>
+            <div class="np-meta">
+              <div class="np-track" id="npTrack">Not Playing</div>
+              <div class="np-artist" id="npArtist">—</div>
+              <div class="np-album" id="npAlbum"></div>
+              <div class="progress-row"><span class="time" id="npPos">0:00</span><div class="prog-track" onclick="seekClick(event)"><div class="prog-fill" id="npFill" style="width:0%"></div></div><span class="time" id="npDur">0:00</span></div>
+              <div class="controls">
+                <button class="ctrl" id="shuffleBtn" onclick="toggleShuffle()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+                <button class="ctrl" onclick="prevTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg></button>
+                <button class="ctrl play-pause" onclick="togglePlay()"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><svg id="pauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+                <button class="ctrl" onclick="nextTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg></button>
+                <button class="ctrl" id="repeatBtn" onclick="cycleRepeat()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></button>
+              </div>
+              <div class="vol-row">
+                <button class="vol-btn" onclick="toggleMute()"><svg id="volIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg><svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
+                <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="50" oninput="setVol(this.value)" onchange="setVol(this.value)">
+                <span class="vol-label" id="volLabel">50</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="section-head"><div class="section-name">Queue</div><span class="section-link" onclick="clearQueue()">Clear</span></div>
+        <div class="queue-list" id="roomQueue"><div class="empty-state">Queue is empty</div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-search">
+      <div class="panel-inner">
+        <div class="panel-title" style="margin-bottom:14px">Search</div>
+        <div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="search-input" type="search" placeholder="Artists, songs, podcasts…" oninput="handleSearch(this.value)"></div>
+        <div id="searchResults" class="empty-state">Start typing to search your music library</div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-favorites">
+      <div class="panel-inner">
+        <div class="panel-title" style="margin-bottom:14px">Favourites</div>
+        <div class="favs-grid" id="favsGrid"><div class="empty-state">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-queue-panel">
+      <div class="panel-inner">
+        <div class="page-header"><div class="panel-title">Queue</div><span class="section-link" onclick="clearQueue()">Clear all</span></div>
+        <div class="queue-list" id="fullQueue"><div class="empty-state">Select a room first</div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-settings">
+      <div class="panel-inner">
+        <div class="page-header" style="margin-bottom:20px">
+          <div class="panel-title">Settings</div>
+          <div style="display:flex;gap:8px">
+            <button class="hdr-btn" onclick="doLogout()">Sign out</button>
+          </div>
+        </div>
+        <div class="settings-grid" id="settingsGrid"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Desktop player bar -->
+  <div class="player-bar">
+    <div class="bar-track"><div class="bar-art" id="barArt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16" style="color:var(--text3)"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></div><div class="bar-track-info"><div class="bar-track-name" id="barTrack">Not Playing</div><div class="bar-track-artist" id="barArtist">—</div></div></div>
+    <div class="bar-controls">
+      <div class="bar-ctrl-row">
+        <button class="bar-btn" id="barShuffleBtn" onclick="toggleShuffle()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+        <button class="bar-btn" onclick="prevTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg></button>
+        <button class="bar-btn play" onclick="togglePlay()"><svg id="barPlayIcon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><svg id="barPauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+        <button class="bar-btn" onclick="nextTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg></button>
+        <button class="bar-btn" id="barRepeatBtn" onclick="cycleRepeat()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></button>
+      </div>
+      <div class="bar-prog"><span class="bar-time" id="barPos">0:00</span><div class="bar-prog-track" onclick="seekClick(event,true)"><div class="bar-prog-fill" id="barFill" style="width:0%"></div></div><span class="bar-time" id="barDur">0:00</span></div>
+    </div>
+    <div class="bar-right">
+      <button class="bar-mute" onclick="toggleMute()"><svg id="barVolIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14"/></svg><svg id="barMuteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
+      <input type="range" class="bar-vol" id="barVol" min="0" max="100" value="50" oninput="setVol(this.value)" onchange="setVol(this.value)">
+      <div class="bar-room" id="barRoom" onclick="showPanel('home')">—</div>
+    </div>
+  </div>
+
+  <!-- Mobile mini player -->
+  <div class="mobile-player" onclick="openMobileNP()">
+    <div class="mobile-player-art" id="mobileArt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14" style="color:var(--text3)"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></div>
+    <div class="mobile-player-info"><div class="mobile-player-track" id="mobileTrack">Not Playing</div><div class="mobile-player-artist" id="mobileArtist">—</div></div>
+    <div class="mobile-player-controls" onclick="event.stopPropagation()">
+      <button class="mob-ctrl" onclick="prevTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/></svg></button>
+      <button class="mob-ctrl play" onclick="togglePlay()"><svg id="mobilePlayIcon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><svg id="mobilePauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+      <button class="mob-ctrl" onclick="nextTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/></svg></button>
+    </div>
+  </div>
+
+  <!-- Mobile nav -->
+  <nav class="mobile-nav">
+    <div class="mobile-nav-item active" id="mnav-home" onclick="showPanel('home');setMNav('home')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</div>
+    <div class="mobile-nav-item" id="mnav-search" onclick="showPanel('search');setMNav('search')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search</div>
+    <div class="mobile-nav-item" id="mnav-favorites" onclick="showPanel('favorites');setMNav('favorites')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>Favourites</div>
+    <div class="mobile-nav-item" id="mnav-rooms" onclick="showMobileRooms()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Rooms</div>
+    <div class="mobile-nav-item" id="mnav-settings" onclick="showPanel('settings');setMNav('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M2 12h2M20 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/></svg>Settings</div>
+  </nav>
+</div>
+
+<!-- Mobile full NP -->
+<div class="mobile-np" id="mobileNP">
+  <div class="mnp-header"><div class="mnp-room-name" id="mnpRoom">—</div><button class="mnp-close" onclick="closeMobileNP()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button></div>
+  <div class="mnp-art" id="mnpArt"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" width="44" height="44"><circle cx="24" cy="24" r="20"/><circle cx="24" cy="24" r="6"/></svg></div>
+  <div class="mnp-track" id="mnpTrack">Not Playing</div>
+  <div class="mnp-artist" id="mnpArtist">—</div>
+  <div class="progress-row" style="margin:12px 0 6px"><span class="time" id="mnpPos">0:00</span><div class="prog-track" onclick="seekClick(event,'mnp')"><div class="prog-fill" id="mnpFill" style="width:0%"></div></div><span class="time" id="mnpDur">0:00</span></div>
+  <div class="mnp-controls">
+    <button class="mnp-ctrl" id="mnpShuffleBtn" onclick="toggleShuffle()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+    <button class="mnp-ctrl" onclick="prevTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg></button>
+    <button class="mnp-ctrl play" onclick="togglePlay()"><svg id="mnpPlayIcon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><svg id="mnpPauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+    <button class="mnp-ctrl" onclick="nextTrack()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg></button>
+    <button class="mnp-ctrl" id="mnpRepeatBtn" onclick="cycleRepeat()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></button>
+  </div>
+  <div class="mnp-vol"><button class="vol-btn" onclick="toggleMute()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg></button><input type="range" class="mnp-vol-slider" id="mnpVol" min="0" max="100" value="50" oninput="setVol(this.value)" onchange="setVol(this.value)"></div>
+</div>
+
+<!-- Mobile rooms sheet -->
+<div id="mobileRoomsSheet">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div style="font-size:18px;font-weight:700">Rooms</div>
+    <button onclick="closeMobileRooms()" style="background:none;border:none;color:var(--text2);cursor:pointer;padding:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="rooms-grid" id="mobileRoomsGrid"></div>
+</div>
+
+<!-- Group modal -->
+<div class="modal-overlay" id="groupModal">
+  <div class="modal">
+    <div class="modal-title">Group Rooms</div>
+    <div class="modal-subtitle" id="groupModalSubtitle">Toggle rooms to add to this group</div>
+    <div id="groupRoomsList"></div>
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeGroupModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="applyGrouping()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="notif-area" id="notifArea"></div>
+
+<script>
+let authToken = localStorage.getItem('sonos_auth') || null;
+let allDevices = [], deviceStates = {}, groupTopology = {};
+let activeHost = null, shuffle = false, repeat = 'none';
+let progInterval = null, currentPos = 0, currentDur = 0;
+let socket = null, groupSelections = {};
+
+// ─── Theme ──────────────────────────────────────────────────────────────────
+function initTheme() {
+  const t = localStorage.getItem('sonos_theme') || 'dark';
+  applyTheme(t);
+}
+function toggleTheme() {
+  const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('sonos_theme', t);
+  applyTheme(t);
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const isDark = t === 'dark';
+  ['themeIconMoon'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = isDark ? '' : 'none'; });
+  ['themeIconSun'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = isDark ? 'none' : ''; });
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('loginPass').focus(); });
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  err.textContent = '';
+  if (!username || !password) { err.textContent = 'Please enter your username and password'; return; }
+  try {
+    const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password}) });
+    const d = await r.json();
+    if (d.ok) { authToken = d.token; localStorage.setItem('sonos_auth', authToken); showApp(); }
+    else err.textContent = d.error || 'Invalid credentials';
+  } catch(e) { err.textContent = 'Could not connect to server'; }
+}
+
+async function doLogout() {
+  await apiFetch('/api/logout','POST');
+  authToken = null; localStorage.removeItem('sonos_auth');
+  if (socket) socket.disconnect();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPass').value = '';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = window.innerWidth >= 768 ? 'grid' : 'flex';
+  initSocket();
+}
+
+async function checkAuth() {
+  if (!authToken) return;
+  try {
+    const r = await fetch('/api/auth/check', { headers:{'x-auth-token': authToken} });
+    const d = await r.json();
+    if (d.authenticated) showApp();
+    else { authToken = null; localStorage.removeItem('sonos_auth'); }
+  } catch(e) {}
+}
+
+// ─── Socket ─────────────────────────────────────────────────────────────────
+function initSocket() {
+  socket = io({ auth: { token: authToken } });
+  socket.on('devices', devs => {
+    allDevices = devs;
+    const playable = devs.filter(d => d.playable !== false);
+    updateDiscoverBtn(playable.length > 0);
+    renderSidebarRooms();
+    renderHomeRooms();
+    if (!activeHost && playable.length > 0) selectRoom(playable[0].host);
+    else if (activeHost) loadFavorites();
+  });
+  socket.on('stateUpdate', ({ host, state }) => {
+    deviceStates[host] = state;
+    if (host === activeHost) updateUI(state);
+    updateSidebarRoom(host, state);
+    updateHomeRoom(host, state);
+  });
+  socket.on('groupTopology', topo => {
+    groupTopology = topo;
+    renderSidebarRooms();
+    renderHomeRooms();
+  });
+  socket.on('demoMode', v => { /* ignored — no banner */ });
+}
+
+// ─── API ────────────────────────────────────────────────────────────────────
+async function apiFetch(path, method='GET', body=null) {
+  const opts = { method, headers:{'Content-Type':'application/json','x-auth-token': authToken||''} };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(path, opts);
+    if (r.status === 401) { doLogout(); return null; }
+    return r.json().catch(() => null);
+  } catch(e) { return null; }
+}
+async function post(path, body={}) { if (!activeHost) return; return apiFetch(`/api/device/${activeHost}/${path}`,'POST',body); }
+
+// ─── Panels ─────────────────────────────────────────────────────────────────
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const panel = document.getElementById('panel-'+id);
+  if (panel) panel.classList.add('active');
+  const map = {home:0,search:1,favorites:2,'queue-panel':3,settings:4};
+  const items = document.querySelectorAll('.nav-item');
+  if (map[id] !== undefined && items[map[id]]) items[map[id]].classList.add('active');
+  if (id === 'favorites') loadFavorites();
+  if (id === 'settings') renderSettings();
+  if (id === 'queue-panel') loadFullQueue();
+}
+function setMNav(id) {
+  document.querySelectorAll('.mobile-nav-item').forEach(n => n.classList.remove('active'));
+  const el = document.getElementById('mnav-'+id); if (el) el.classList.add('active');
+}
+function showMobileRooms() { setMNav('rooms'); renderMobileRoomsGrid(); document.getElementById('mobileRoomsSheet').style.display = 'block'; }
+function closeMobileRooms() { document.getElementById('mobileRoomsSheet').style.display = 'none'; }
+function openMobileNP() { document.getElementById('mobileNP').classList.add('open'); }
+function closeMobileNP() { document.getElementById('mobileNP').classList.remove('open'); }
+
+// ─── Room helpers ────────────────────────────────────────────────────────────
+function getCoordinator(host) {
+  // Returns coordinator host for this device (could be itself)
+  for (const [coord, members] of Object.entries(groupTopology)) {
+    if (members.includes(host)) return coord;
+    if (coord === host) return coord;
+  }
+  return null;
+}
+function getGroupMembers(host) {
+  return groupTopology[host] || [];
+}
+function isGrouped(host) {
+  const members = getGroupMembers(host);
+  return members.length > 1; // more than just itself
+}
+function isGroupMember(host) {
+  // Is this host in someone else's group (not coordinator)?
+  for (const [coord, members] of Object.entries(groupTopology)) {
+    if (coord !== host && members.includes(host)) return true;
+  }
+  return false;
+}
+
+function selectRoom(host) {
+  activeHost = host;
+  document.querySelectorAll('.room-row').forEach(r => r.classList.toggle('active', r.dataset.host === host));
+  const dev = allDevices.find(d => d.host === host);
+  if (dev) {
+    document.getElementById('roomName').textContent = dev.name;
+    document.getElementById('roomModel').textContent = dev.model || 'Sonos Speaker';
+    document.getElementById('barRoom').textContent = dev.name;
+    document.getElementById('mnpRoom').textContent = dev.name;
+  }
+  loadRoomState(host);
+  loadFavorites();
+  showPanel('room');
+  closeMobileRooms();
+}
+
+async function loadRoomState(host) {
+  const state = await apiFetch(`/api/device/${host}/state`);
+  if (state) { deviceStates[host] = state; updateUI(state); }
+}
+
+// ─── UI update ───────────────────────────────────────────────────────────────
+function updateUI(state) {
+  if (!state) return;
+  const track = state.track || {};
+  const title = cleanTitle(track.title) || 'Not Playing';
+  const artist = cleanTitle(track.artist) || '—';
+
+  ['npTrack','barTrack','mobileTrack','mnpTrack'].forEach(id => setText(id, title));
+  ['npArtist','barArtist','mobileArtist','mnpArtist'].forEach(id => setText(id, artist));
+  setText('npAlbum', track.album || '');
+
+  const art = track.albumArtUri || '';
+  setArt('npArt', art, 36); setArt('barArt', art, 16); setArt('mobileArt', art, 14); setArt('mnpArt', art, 44);
+
+  setPlayState(!!state.playing);
+  const vol = state.volume ?? 50;
+  ['volSlider','barVol','mnpVol'].forEach(id => setVal(id, vol));
+  setText('volLabel', vol);
+  setMuteState(!!state.muted);
+
+  if (track.duration) {
+    const pos = posToSec(track.position || 0);
+    const dur = posToSec(track.duration);
+    currentPos = pos; currentDur = dur;
+    updateProgress(pos, dur);
+    if (state.playing) startTick(); else stopTick();
+  } else { stopTick(); }
+
+  if (state.queue) renderQueue(state.queue, 'roomQueue');
+}
+
+function cleanTitle(t) {
+  if (!t) return '';
+  // Strip raw URIs that leaked through as titles
+  if (t.startsWith('x-') || t.startsWith('http') || t.includes('://') || t.startsWith('/api/art')) return '';
+  return t;
+}
+
+function setText(id, val) { const el = document.getElementById(id); if(el) el.textContent = val; }
+function setVal(id, val) { const el = document.getElementById(id); if(el) el.value = val; }
+
+function setArt(elId, url, iconSize) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const fallback = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="${iconSize}" height="${iconSize}" style="color:var(--text3)"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`;
+  if (url) {
+    const img = document.createElement('img');
+    img.src = url; img.alt = '';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+    img.onerror = () => { el.innerHTML = fallback; };
+    el.innerHTML = ''; el.appendChild(img);
+  } else { el.innerHTML = fallback; }
+}
+
+function setPlayState(playing) {
+  [['playIcon','pauseIcon'],['barPlayIcon','barPauseIcon'],['mobilePlayIcon','mobilePauseIcon'],['mnpPlayIcon','mnpPauseIcon']].forEach(([p,pu]) => {
+    const pe = document.getElementById(p), pue = document.getElementById(pu);
+    if(pe) pe.style.display = playing ? 'none' : ''; if(pue) pue.style.display = playing ? '' : 'none';
+  });
+}
+function setMuteState(muted) {
+  [['volIcon','muteIcon'],['barVolIcon','barMuteIcon']].forEach(([v,m]) => {
+    const ve = document.getElementById(v), me = document.getElementById(m);
+    if(ve) ve.style.display = muted ? 'none' : ''; if(me) me.style.display = muted ? '' : 'none';
+  });
+}
+function updateProgress(pos, dur) {
+  const pct = dur > 0 ? Math.min(pos/dur*100,100) : 0;
+  ['npFill','barFill','mnpFill'].forEach(id => { const el = document.getElementById(id); if(el) el.style.width = pct+'%'; });
+  ['npPos','barPos','mnpPos'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = secToTime(pos); });
+  ['npDur','barDur','mnpDur'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = secToTime(dur); });
+}
+function startTick() { stopTick(); progInterval = setInterval(() => { currentPos++; updateProgress(currentPos, currentDur); }, 1000); }
+function stopTick() { if(progInterval) { clearInterval(progInterval); progInterval = null; } }
+
+// ─── Sidebar rooms ────────────────────────────────────────────────────────────
+function renderSidebarRooms() {
+  const el = document.getElementById('sidebarRooms');
+  const playable = allDevices.filter(d => d.playable !== false);
+  if (!playable.length) { el.innerHTML = '<div class="empty-state" style="padding:12px 16px;font-size:12px">No rooms found</div>'; return; }
+
+  // Group devices: coordinators first with their members indented
+  const rendered = new Set();
+  let html = '';
+
+  // Sort: coordinators with groups first, then standalone
+  const coordinators = playable.filter(d => isGrouped(d.host));
+  const standalone = playable.filter(d => !isGrouped(d.host) && !isGroupMember(d.host));
+  const members = playable.filter(d => isGroupMember(d.host));
+
+  const renderRow = (d, indent=false) => {
+    if (rendered.has(d.host)) return '';
+    rendered.add(d.host);
+    const s = deviceStates[d.host] || {};
+    const isCoord = isGrouped(d.host);
+    const isMem = isGroupMember(d.host);
+    const groupLabel = isCoord ? `<span class="group-badge coord">Group</span>` : isMem ? `<span class="group-badge">Grouped</span>` : '';
+    const track = s.playing && cleanTitle(s.track?.title) ? cleanTitle(s.track.title) : s.playing ? 'Playing' : 'Stopped';
+    return `<div class="room-row${d.host === activeHost ? ' active' : ''}" data-host="${d.host}" onclick="selectRoom('${d.host}')" style="${indent ? 'padding-left:24px' : ''}">
+      <div class="room-dot${s.playing ? ' on' : ''}"></div>
+      <div class="room-row-info"><div class="room-row-name">${d.name}</div><div class="room-row-sub">${track}</div></div>
+      ${groupLabel}
+      <div class="room-row-vol">${s.volume !== undefined ? s.volume+'%' : ''}</div>
+    </div>`;
+  };
+
+  coordinators.forEach(d => {
+    html += renderRow(d);
+    getGroupMembers(d.host).filter(h => h !== d.host).forEach(mh => {
+      const md = allDevices.find(x => x.host === mh);
+      if (md && md.playable !== false) html += renderRow(md, true);
+    });
+  });
+  standalone.forEach(d => { html += renderRow(d); });
+  // Any remaining members not already rendered
+  members.forEach(d => { html += renderRow(d); });
+
+  el.innerHTML = html;
+}
+
+function updateSidebarRoom(host, state) {
+  const el = document.querySelector(`.room-row[data-host="${host}"]`);
+  if (!el) return;
+  const dot = el.querySelector('.room-dot'), sub = el.querySelector('.room-row-sub'), vol = el.querySelector('.room-row-vol');
+  if(dot) dot.classList.toggle('on', state.playing);
+  if(sub) sub.textContent = state.playing && cleanTitle(state.track?.title) ? cleanTitle(state.track.title) : state.playing ? 'Playing' : 'Stopped';
+  if(vol) vol.textContent = state.volume !== undefined ? state.volume+'%' : '';
+}
+
+// ─── Home rooms grid ──────────────────────────────────────────────────────────
+function roomCardHTML(d) {
+  const s = deviceStates[d.host] || {};
+  const grouped = isGrouped(d.host) || isGroupMember(d.host);
+  const groupInfo = isGrouped(d.host) ? `<div class="rc-group">▶ Group coordinator</div>` :
+    isGroupMember(d.host) ? `<div class="rc-group">Grouped</div>` : '';
+  return `<div class="room-card${d.host === activeHost ? ' selected' : ''}${grouped ? ' grouped' : ''}" id="rc-${d.host.replace(/\./g,'-')}" onclick="selectRoom('${d.host}')">
+    <div class="rc-top"><div style="min-width:0;flex:1"><div class="rc-name">${d.name}</div><div class="rc-model">${d.model||'Sonos'}</div></div>${s.playing ? '<div class="eq-bars" style="flex-shrink:0"><span></span><span></span><span></span></div>' : ''}</div>
+    <div class="rc-track">${cleanTitle(s.track?.title) || (s.playing ? 'Playing' : '—')}</div>
+    <div class="rc-vol">Vol: ${s.volume !== undefined ? s.volume+'%' : '—'}</div>
+    ${groupInfo}
+  </div>`;
+}
+
+function renderHomeRooms() {
+  const el = document.getElementById('homeRooms');
+  const playable = allDevices.filter(d => d.playable !== false);
+  if (!playable.length) { el.innerHTML = '<div class="empty-state">No Sonos speakers found. Click Speaker Discovery.</div>'; return; }
+  el.innerHTML = playable.map(d => roomCardHTML(d)).join('');
+}
+
+function updateHomeRoom(host, state) {
+  const card = document.getElementById('rc-'+host.replace(/\./g,'-'));
+  if (!card) return;
+  const dev = allDevices.find(d => d.host === host);
+  if (!dev) return;
+  const grouped = isGrouped(host) || isGroupMember(host);
+  card.className = `room-card${host === activeHost ? ' selected' : ''}${grouped ? ' grouped' : ''}`;
+  const groupInfo = isGrouped(host) ? `<div class="rc-group">▶ Group coordinator</div>` : isGroupMember(host) ? `<div class="rc-group">Grouped</div>` : '';
+  card.innerHTML = `<div class="rc-top"><div style="min-width:0;flex:1"><div class="rc-name">${dev.name}</div><div class="rc-model">${dev.model||'Sonos'}</div></div>${state.playing ? '<div class="eq-bars" style="flex-shrink:0"><span></span><span></span><span></span></div>' : ''}</div><div class="rc-track">${cleanTitle(state.track?.title)||(state.playing?'Playing':'—')}</div><div class="rc-vol">Vol: ${state.volume !== undefined ? state.volume+'%' : '—'}</div>${groupInfo}`;
+}
+
+function renderMobileRoomsGrid() {
+  const el = document.getElementById('mobileRoomsGrid');
+  const playable = allDevices.filter(d => d.playable !== false);
+  if (el) el.innerHTML = playable.map(d => roomCardHTML(d)).join('') || '<div class="empty-state">No rooms found</div>';
+}
+
+// ─── Favorites ────────────────────────────────────────────────────────────────
+async function loadFavorites() {
+  const host = activeHost || allDevices.find(d => d.playable !== false)?.host;
+  if (!host) return;
+  const data = await apiFetch(`/api/device/${host}/favorites`);
+  const items = data?.items || [];
+  renderFavs(items, 'favsGrid');
+  renderFavs(items.slice(0,6), 'homeFavs');
+}
+
+function renderFavs(items, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!items.length) { el.innerHTML = '<div class="empty-state">No favourites yet</div>'; return; }
+  el.innerHTML = items.map(item => `<div class="fav-card" onclick="playFav('${esc(item.uri)}','${esc(item.metadata||'')}')">
+    <div class="fav-art">${item.albumArtUri ? `<img src="${item.albumArtUri}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}</div>
+    <div class="fav-name">${item.title||'Untitled'}</div>
+  </div>`).join('');
+}
+
+// ─── Queue ────────────────────────────────────────────────────────────────────
+function renderQueue(items, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!items?.length) { el.innerHTML = '<div class="empty-state">Queue is empty</div>'; return; }
+  el.innerHTML = items.slice(0,50).map((item,i) => `<div class="q-item">
+    <div class="q-num">${i+1}</div>
+    <div class="q-art">${item.albumArtUri ? `<img src="${item.albumArtUri}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : ''}</div>
+    <div class="q-info"><div class="q-track">${cleanTitle(item.title)||'Unknown'}</div><div class="q-artist">${cleanTitle(item.artist)||''}</div></div>
+    <div class="q-dur">${item.duration ? secToTime(posToSec(item.duration)) : ''}</div>
+  </div>`).join('');
+}
+
+async function loadFullQueue() {
+  if (!activeHost) return;
+  const data = await apiFetch(`/api/device/${activeHost}/queue`);
+  renderQueue(data?.items || [], 'fullQueue');
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+let searchTimer;
+function handleSearch(val) {
+  clearTimeout(searchTimer);
+  const el = document.getElementById('searchResults');
+  if (!val.trim()) { el.innerHTML = '<div class="empty-state">Start typing to search</div>'; return; }
+  el.innerHTML = '<div class="empty-state"><span class="spinner"></span> Searching…</div>';
+  // Instant search — fire immediately, debounce only for rapid typing
+  searchTimer = setTimeout(async () => {
+    if (!activeHost) { el.innerHTML = '<div class="empty-state">Select a room first</div>'; return; }
+    const data = await apiFetch(`/api/device/${activeHost}/search?q=${encodeURIComponent(val.trim())}`);
+    const items = data?.items || [];
+    if (!items.length) { el.innerHTML = '<div class="empty-state">No results found</div>'; return; }
+    const localItems = items.filter(i => i.type === 'track');
+    const radioItems = items.filter(i => i.type === 'radio');
+    let html = '<div class="queue-list">';
+    if (localItems.length) {
+      html += `<div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);padding:8px 8px 4px">Music Library</div>`;
+      html += localItems.map(item => `<div class="q-item" onclick="playFav('${esc(item.uri)}')">
+        <div class="q-art">${item.albumArtUri ? `<img src="${item.albumArtUri}" alt="">` : ''}</div>
+        <div class="q-info"><div class="q-track">${item.title||''}</div><div class="q-artist">${item.artist||''}</div></div>
+      </div>`).join('');
+    }
+    if (radioItems.length) {
+      html += `<div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);padding:8px 8px 4px;margin-top:${localItems.length?'8px':'0'}">Radio Stations</div>`;
+      html += radioItems.map(item => `<div class="q-item" onclick="playRadio('${esc(item.uri)}','${esc(item.title)}')">
+        <div class="q-art">${item.albumArtUri ? `<img src="${item.albumArtUri}" alt="">` : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18" style="margin:auto;color:var(--text3)"><path d="M3 18v-6a9 9 0 0118 0v6"/><rect x="21" y="15" width="2" height="6" rx="1"/><rect x="1" y="15" width="2" height="6" rx="1"/></svg>`}</div>
+        <div class="q-info"><div class="q-track">${item.title||''}</div><div class="q-artist">${item.artist||'Radio'}</div></div>
+      </div>`).join('');
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }, 200);
+}
+
+async function playRadio(uri, title) {
+  if (!activeHost) { notify('Select a room first'); return; }
+  notify('Starting radio…');
+  await apiFetch(`/api/device/${activeHost}/playTuneIn`, 'POST', { uri, title });
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+function renderSettings() {
+  const el = document.getElementById('settingsGrid');
+  // Show ALL devices in settings (including Bridge, Sub)
+  el.innerHTML = allDevices.map(d => {
+    const s = deviceStates[d.host] || {};
+    return `<div class="settings-card">
+      <div class="settings-card-title">${d.name}${!d.playable ? ' (non-playable)' : ''}</div>
+      <div class="s-row"><div class="s-label">Model</div><div class="s-value">${d.model||'Sonos'}</div></div>
+      <div class="s-row"><div class="s-label">IP</div><div class="s-value">${d.host}</div></div>
+      <div class="s-row"><div class="s-label">Volume</div><div class="s-value">${d.playable ? (s.volume !== undefined ? s.volume+'%' : '—') : 'N/A'}</div></div>
+      <div class="s-row"><div class="s-label">Status</div><div class="s-value">${d.playable ? (s.playing ? '▶ Playing' : '■ Stopped') : 'Infrastructure'}</div></div>
+    </div>`;
+  }).join('') || '<div class="empty-state">No devices found</div>';
+}
+
+// ─── Grouping ─────────────────────────────────────────────────────────────────
+async function openGroupModal() {
+  if (!activeHost) return;
+  const activeDev = allDevices.find(d => d.host === activeHost);
+  document.getElementById('groupModalSubtitle').textContent = `Rooms to group with ${activeDev?.name || activeHost}`;
+  const data = await apiFetch(`/api/device/${activeHost}/groups`);
+  const groups = data?.groups || [];
+  let currentMembers = new Set([activeHost]);
+  for (const g of groups) {
+    const hosts = g.members.map(m => allDevices.find(d => d.udn === m.uuid || d.host === m.host)?.host).filter(Boolean);
+    if (hosts.includes(activeHost)) { hosts.forEach(h => currentMembers.add(h)); break; }
+  }
+  groupSelections = {};
+  allDevices.filter(d => d.host !== activeHost && d.playable !== false).forEach(d => {
+    groupSelections[d.host] = currentMembers.has(d.host);
+  });
+  renderGroupModal();
+  document.getElementById('groupModal').classList.add('open');
+}
+
+function renderGroupModal() {
+  const el = document.getElementById('groupRoomsList');
+  const others = allDevices.filter(d => d.host !== activeHost && d.playable !== false);
+  el.innerHTML = others.map(d => {
+    const s = deviceStates[d.host] || {};
+    return `<div class="group-room-row">
+      <div class="group-room-info"><div class="group-room-name">${d.name}</div><div class="group-room-status">${d.model||'Sonos'} · ${s.playing?'Playing':'Stopped'}</div></div>
+      <button class="toggle-pill${groupSelections[d.host]?' on':''}" id="gt-${d.host.replace(/\./g,'-')}" onclick="toggleGroupRoom('${d.host}')"></button>
+    </div>`;
+  }).join('') || '<div class="empty-state">No other rooms available</div>';
+}
+
+function toggleGroupRoom(host) {
+  groupSelections[host] = !groupSelections[host];
+  const btn = document.getElementById('gt-'+host.replace(/\./g,'-'));
+  if (btn) btn.classList.toggle('on', groupSelections[host]);
+}
+
+async function applyGrouping() {
+  closeGroupModal();
+  const ops = Object.entries(groupSelections).map(([host, inGroup]) =>
+    inGroup ? apiFetch(`/api/device/${host}/join`,'POST',{coordinator:activeHost})
+            : apiFetch(`/api/device/${host}/leave`,'POST')
+  );
+  await Promise.all(ops);
+  notify('Group updated');
+}
+
+function closeGroupModal() { document.getElementById('groupModal').classList.remove('open'); }
+
+// ─── Playback ─────────────────────────────────────────────────────────────────
+async function togglePlay() {
+  const s = deviceStates[activeHost];
+  if (s?.playing) {
+    await post('pause');
+  } else {
+    const result = await post('play');
+    if (result?.error) {
+      notify('Nothing queued — choose a Favourite to start playing');
+    }
+  }
+}
+
+async function playEverywhere() {
+  if (!activeHost) { notify('Select a room first'); return; }
+  notify('Grouping all rooms…');
+  const playable = allDevices.filter(d => d.playable !== false && d.host !== activeHost);
+  await Promise.all(playable.map(d => apiFetch(`/api/device/${d.host}/join`, 'POST', { coordinator: activeHost })));
+  notify('Playing everywhere');
+}
+async function nextTrack() { await post('next'); }
+async function prevTrack() { await post('previous'); }
+async function setVol(val) {
+  ['volSlider','barVol','mnpVol'].forEach(id => setVal(id, val));
+  setText('volLabel', val);
+  await post('volume', {volume: parseInt(val)});
+}
+async function toggleMute() { const s = deviceStates[activeHost]; await post('mute', {muted: !s?.muted}); }
+async function toggleShuffle() {
+  shuffle = !shuffle;
+  ['shuffleBtn','barShuffleBtn','mnpShuffleBtn'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.toggle('active', shuffle); });
+  await post('shuffle', {enabled: shuffle}); notify(shuffle ? 'Shuffle on' : 'Shuffle off');
+}
+const repeatModes = ['none','all','one'];
+async function cycleRepeat() {
+  repeat = repeatModes[(repeatModes.indexOf(repeat)+1)%3];
+  const on = repeat !== 'none';
+  ['repeatBtn','barRepeatBtn','mnpRepeatBtn'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.toggle('active', on); });
+  await post('repeat', {mode: repeat}); notify('Repeat: '+repeat);
+}
+function seekClick(e) {
+  if (!currentDur) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX-rect.left)/rect.width));
+  post('seek', {position: Math.floor(pct*currentDur)});
+}
+async function clearQueue() {
+  await apiFetch(`/api/device/${activeHost}/queue`,'DELETE');
+  renderQueue([], 'roomQueue'); renderQueue([], 'fullQueue'); notify('Queue cleared');
+}
+async function playFav(uri, metadata='') {
+  if (!activeHost) { notify('Select a room first'); return; }
+  const result = await post('playUri', { uri, metadata });
+  if (result?.error) notify('Could not play — try starting from the Sonos app first');
+  else notify('Playing');
+}
+async function rediscover() { notify('Scanning for speakers…'); await apiFetch('/api/rediscover','POST'); }
+
+function updateDiscoverBtn(hasDevices) {
+  const btn = document.getElementById('discoverBtn');
+  if (btn) btn.textContent = hasDevices ? 'Speakers' : 'Speaker Discovery';
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function posToSec(pos) {
+  if (!pos) return 0; if (typeof pos === 'number') return pos;
+  const p = String(pos).split(':').map(Number);
+  if (p.length === 3) return p[0]*3600+p[1]*60+p[2];
+  if (p.length === 2) return p[0]*60+p[1];
+  return parseInt(pos)||0;
+}
+function secToTime(s) { if(!s||isNaN(s)) return '0:00'; return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
+function esc(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function notify(msg) {
+  const area = document.getElementById('notifArea');
+  const el = document.createElement('div'); el.className='notif'; el.textContent=msg;
+  area.appendChild(el); setTimeout(()=>el.remove(), 2500);
+}
+
+window.addEventListener('resize', () => {
+  const app = document.getElementById('app');
+  if (app.style.display !== 'none') app.style.display = window.innerWidth >= 768 ? 'grid' : 'flex';
+});
+
+document.getElementById('groupModal').addEventListener('click', function(e) { if(e.target===this) closeGroupModal(); });
+
+initTheme();
+checkAuth();
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  sonos-controller:
+    build: .
+    container_name: sonos-controller
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    # IMPORTANT: host networking allows Sonos discovery (UPnP/SSDP)
+    # On Linux, use: network_mode: "host"
+    # On Windows/Mac with Docker Desktop, use the ports mapping above
+    # and set SONOS_HOST manually if needed
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# For Linux hosts where auto-discovery is needed:
+# Uncomment the line below and comment out the ports section
+# network_mode: "host"
